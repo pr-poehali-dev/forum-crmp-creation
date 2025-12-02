@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "Get categories list",
+      "method": "GET",
+      "path": "/?path=categories",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Get topics list",
+      "method": "GET",
+      "path": "/?path=topics",
+      "expectedStatus": 200
+    }
+  ]
+}

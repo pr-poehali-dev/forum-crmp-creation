@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
+import { api, User as ApiUser, Category as ApiCategory, Topic as ApiTopic } from '@/lib/api';
 
 type UserRole = 'user' | 'moderator' | 'admin';
 
@@ -50,99 +51,103 @@ const Index = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('forum');
-  const [topics, setTopics] = useState<Topic[]>([
-    {
-      id: '1',
-      title: 'Добро пожаловать на форум CRMP!',
-      author: { id: '1', username: 'Admin', avatar: '', role: 'admin', rank: 'Администратор', posts: 1500, reputation: 9999 },
-      replies: 42,
-      views: 1203,
-      lastActivity: '2 часа назад',
-      isPinned: true,
-      isLocked: false,
-      category: 'general'
-    },
-    {
-      id: '2',
-      title: 'Правила форума - обязательно к прочтению',
-      author: { id: '1', username: 'Admin', avatar: '', role: 'admin', rank: 'Администратор', posts: 1500, reputation: 9999 },
-      replies: 15,
-      views: 856,
-      lastActivity: '5 часов назад',
-      isPinned: true,
-      isLocked: true,
-      category: 'general'
-    },
-    {
-      id: '3',
-      title: 'Как начать играть на сервере? Гайд для новичков',
-      author: { id: '2', username: 'Helper', avatar: '', role: 'moderator', rank: 'Модератор', posts: 523, reputation: 2100 },
-      replies: 89,
-      views: 3421,
-      lastActivity: '15 минут назад',
-      isPinned: false,
-      isLocked: false,
-      category: 'guides'
-    },
-    {
-      id: '4',
-      title: 'Набор в администрацию сервера',
-      author: { id: '1', username: 'Admin', avatar: '', role: 'admin', rank: 'Администратор', posts: 1500, reputation: 9999 },
-      replies: 156,
-      views: 5234,
-      lastActivity: '1 час назад',
-      isPinned: false,
-      isLocked: false,
-      category: 'jobs'
-    },
-    {
-      id: '5',
-      title: 'Обновление 2.0 - Новые возможности!',
-      author: { id: '3', username: 'Developer', avatar: '', role: 'admin', rank: 'Разработчик', posts: 342, reputation: 4500 },
-      replies: 234,
-      views: 8912,
-      lastActivity: '30 минут назад',
-      isPinned: false,
-      isLocked: false,
-      category: 'updates'
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [registerData, setRegisterData] = useState({ username: '', email: '', password: '' });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [categoriesData, topicsData] = await Promise.all([
+        api.getCategories(),
+        api.getTopics()
+      ]);
+      
+      setCategories(categoriesData.map(c => ({
+        id: String(c.id),
+        name: c.name,
+        description: c.description,
+        topics: c.topics_count,
+        icon: c.icon,
+        color: c.color
+      })));
+
+      setTopics(topicsData.map(t => ({
+        id: String(t.id),
+        title: t.title,
+        author: {
+          id: String(t.author_id),
+          username: t.author_username || 'Unknown',
+          avatar: '',
+          role: (t.author_role as UserRole) || 'user',
+          rank: t.author_rank || 'Новичок',
+          posts: t.author_posts || 0,
+          reputation: t.author_reputation || 0
+        },
+        replies: t.replies_count,
+        views: t.views_count,
+        lastActivity: formatTimeAgo(t.seconds_ago || 0),
+        isPinned: t.is_pinned,
+        isLocked: t.is_locked,
+        category: String(t.category_id)
+      })));
+
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      toast.error('Ошибка загрузки данных');
+      setLoading(false);
     }
-  ]);
-
-  const [categories] = useState<Category[]>([
-    { id: 'general', name: 'Общее', description: 'Общие обсуждения и новости', topics: 245, icon: 'MessageSquare', color: 'from-purple-500 to-pink-500' },
-    { id: 'guides', name: 'Гайды', description: 'Полезные руководства и инструкции', topics: 89, icon: 'BookOpen', color: 'from-blue-500 to-cyan-500' },
-    { id: 'jobs', name: 'Вакансии', description: 'Набор в администрацию', topics: 34, icon: 'Briefcase', color: 'from-orange-500 to-red-500' },
-    { id: 'updates', name: 'Обновления', description: 'Новости и обновления сервера', topics: 56, icon: 'Zap', color: 'from-green-500 to-emerald-500' },
-    { id: 'support', name: 'Поддержка', description: 'Помощь и технические вопросы', topics: 178, icon: 'HelpCircle', color: 'from-yellow-500 to-amber-500' },
-    { id: 'reports', name: 'Жалобы', description: 'Жалобы на игроков и баги', topics: 123, icon: 'AlertTriangle', color: 'from-red-500 to-rose-500' }
-  ]);
-
-  const handleLogin = () => {
-    setCurrentUser({
-      id: '999',
-      username: 'Player_123',
-      avatar: '',
-      role: 'user',
-      rank: 'Новичок',
-      posts: 5,
-      reputation: 10
-    });
-    setIsLoginOpen(false);
-    toast.success('Вы успешно вошли в систему!');
   };
 
-  const handleRegister = () => {
-    setCurrentUser({
-      id: '999',
-      username: 'NewPlayer',
-      avatar: '',
-      role: 'user',
-      rank: 'Новичок',
-      posts: 0,
-      reputation: 0
-    });
-    setIsRegisterOpen(false);
-    toast.success('Регистрация прошла успешно!');
+  const formatTimeAgo = (seconds: number): string => {
+    if (seconds < 60) return 'только что';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} минут назад`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} часов назад`;
+    return `${Math.floor(seconds / 86400)} дней назад`;
+  };
+
+  const handleLogin = async () => {
+    try {
+      const user = await api.login(loginUsername);
+      setCurrentUser({
+        id: String(user.id),
+        username: user.username,
+        avatar: user.avatar_url || '',
+        role: user.role,
+        rank: user.rank,
+        posts: user.posts_count,
+        reputation: user.reputation
+      });
+      setIsLoginOpen(false);
+      toast.success('Вы успешно вошли в систему!');
+    } catch (error) {
+      toast.error('Ошибка входа. Проверьте логин.');
+    }
+  };
+
+  const handleRegister = async () => {
+    try {
+      const user = await api.register(registerData.username, registerData.email, registerData.password);
+      setCurrentUser({
+        id: String(user.id),
+        username: user.username,
+        avatar: user.avatar_url || '',
+        role: user.role,
+        rank: user.rank,
+        posts: user.posts_count,
+        reputation: user.reputation
+      });
+      setIsRegisterOpen(false);
+      toast.success('Регистрация прошла успешно!');
+    } catch (error) {
+      toast.error('Ошибка регистрации. Попробуйте другой логин.');
+    }
   };
 
   const getRoleBadgeColor = (role: UserRole) => {
@@ -153,19 +158,40 @@ const Index = () => {
     }
   };
 
-  const deleteTopic = (topicId: string) => {
-    setTopics(topics.filter(t => t.id !== topicId));
-    toast.success('Тема удалена');
+  const deleteTopic = async (topicId: string) => {
+    try {
+      await api.archiveTopic(Number(topicId));
+      setTopics(topics.filter(t => t.id !== topicId));
+      toast.success('Тема удалена');
+    } catch (error) {
+      toast.error('Ошибка удаления темы');
+    }
   };
 
-  const togglePin = (topicId: string) => {
-    setTopics(topics.map(t => t.id === topicId ? { ...t, isPinned: !t.isPinned } : t));
-    toast.success('Статус закрепления изменён');
+  const togglePin = async (topicId: string) => {
+    const topic = topics.find(t => t.id === topicId);
+    if (!topic) return;
+    
+    try {
+      await api.toggleTopicPin(Number(topicId), !topic.isPinned);
+      setTopics(topics.map(t => t.id === topicId ? { ...t, isPinned: !t.isPinned } : t));
+      toast.success('Статус закрепления изменён');
+    } catch (error) {
+      toast.error('Ошибка изменения статуса');
+    }
   };
 
-  const toggleLock = (topicId: string) => {
-    setTopics(topics.map(t => t.id === topicId ? { ...t, isLocked: !t.isLocked } : t));
-    toast.success('Статус блокировки изменён');
+  const toggleLock = async (topicId: string) => {
+    const topic = topics.find(t => t.id === topicId);
+    if (!topic) return;
+    
+    try {
+      await api.toggleTopicLock(Number(topicId), !topic.isLocked);
+      setTopics(topics.map(t => t.id === topicId ? { ...t, isLocked: !t.isLocked } : t));
+      toast.success('Статус блокировки изменён');
+    } catch (error) {
+      toast.error('Ошибка изменения статуса');
+    }
   };
 
   return (
@@ -212,11 +238,11 @@ const Index = () => {
                     <div className="space-y-4">
                       <div>
                         <Label>Логин</Label>
-                        <Input placeholder="Введите логин" />
-                      </div>
-                      <div>
-                        <Label>Пароль</Label>
-                        <Input type="password" placeholder="Введите пароль" />
+                        <Input 
+                          placeholder="Введите логин" 
+                          value={loginUsername}
+                          onChange={(e) => setLoginUsername(e.target.value)}
+                        />
                       </div>
                       <Button className="w-full" onClick={handleLogin}>Войти</Button>
                     </div>
@@ -234,15 +260,29 @@ const Index = () => {
                     <div className="space-y-4">
                       <div>
                         <Label>Логин</Label>
-                        <Input placeholder="Выберите логин" />
+                        <Input 
+                          placeholder="Выберите логин"
+                          value={registerData.username}
+                          onChange={(e) => setRegisterData({...registerData, username: e.target.value})}
+                        />
                       </div>
                       <div>
                         <Label>Email</Label>
-                        <Input type="email" placeholder="Введите email" />
+                        <Input 
+                          type="email" 
+                          placeholder="Введите email"
+                          value={registerData.email}
+                          onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                        />
                       </div>
                       <div>
                         <Label>Пароль</Label>
-                        <Input type="password" placeholder="Придумайте пароль" />
+                        <Input 
+                          type="password" 
+                          placeholder="Придумайте пароль"
+                          value={registerData.password}
+                          onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                        />
                       </div>
                       <Button className="w-full" onClick={handleRegister}>Зарегистрироваться</Button>
                     </div>
